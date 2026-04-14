@@ -16,6 +16,13 @@ class ReportController extends Controller
     {
         $user = $request->user();
 
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
         $validator = Validator::make($request->all(), [
             'reportable_type' => 'required|in:amendment,proposal',
             'reportable_id' => 'required|integer',

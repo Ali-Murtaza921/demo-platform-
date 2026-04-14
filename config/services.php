@@ -44,10 +44,27 @@ return [
         'api_key' => env('OPENSTATES_API_KEY'),
         'max_per_page' => env('OPENSTATES_MAX_PER_PAGE', 20),
         'request_interval_ms' => env('OPENSTATES_REQUEST_INTERVAL_MS', 6500),
+        'timeout_seconds' => env('OPENSTATES_TIMEOUT_SECONDS', 60),
+        'connect_timeout_seconds' => env('OPENSTATES_CONNECT_TIMEOUT_SECONDS', 15),
+        'retry_delay_ms' => env('OPENSTATES_RETRY_DELAY_MS', 1500),
     ],
 
     'google_maps' => [
         'api_key' => env('GOOGLE_MAPS_API_KEY'),
+    ],
+
+    'district_population' => [
+        'provider' => env('DISTRICT_POPULATION_PROVIDER', 'manual'),
+        'api_key' => env('DISTRICT_POPULATION_API_KEY'),
+        'base_url' => env('DISTRICT_POPULATION_BASE_URL'),
+    ],
+
+    'identity_verification' => [
+        'provider' => env('IDENTITY_VERIFICATION_PROVIDER', 'manual'),
+        'persona_api_key' => env('PERSONA_API_KEY'),
+        'idenfy_api_key' => env('IDENFY_API_KEY'),
+        'veryfi_client_id' => env('VERYFI_CLIENT_ID'),
+        'veryfi_api_key' => env('VERYFI_API_KEY'),
     ],
 
 ];

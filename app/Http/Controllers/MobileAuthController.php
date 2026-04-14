@@ -79,6 +79,14 @@ class MobileAuthController extends Controller
             return response()->json(['message' => 'The verification code is invalid or has expired.'], 422);
         }
 
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is currently suspended.',
+                'suspension' => $user->suspensionDetails(),
+                'user' => $user->fresh()->mobileProfile(),
+            ], 423);
+        }
+
         $token = $user->createToken($input['device_name'])->plainTextToken;
         $user = $user->fresh();
 
@@ -170,6 +178,14 @@ class MobileAuthController extends Controller
                 'next_step' => 'verify_email',
                 'user' => $user->fresh()->mobileProfile(),
             ], 403);
+        }
+
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is currently suspended.',
+                'suspension' => $user->suspensionDetails(),
+                'user' => $user->fresh()->mobileProfile(),
+            ], 423);
         }
 
         $token = $user->createToken($request->string('device_name')->toString())->plainTextToken;

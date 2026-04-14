@@ -54,6 +54,13 @@ class AuthController extends Controller
             return response()->json(['message' => 'The provided credentials are incorrect.'], 401);
         }
 
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is currently suspended.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
         $token = $user->createToken($request->string('device_name')->toString())->plainTextToken;
 
         return response()->json([

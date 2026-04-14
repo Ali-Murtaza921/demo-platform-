@@ -10,6 +10,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -105,11 +106,32 @@ class AmendmentResource extends Resource
                     ->requiresConfirmation()
                     ->visible(fn (Amendment $record): bool => !$record->hidden)
                     ->action(fn (Amendment $record) => $record->update(['hidden' => true])),
-                Action::make('unhide')
+                Action::make('approveAndRestore')
+                    ->label('Approve & Restore')
                     ->color('success')
                     ->requiresConfirmation()
                     ->visible(fn (Amendment $record): bool => (bool) $record->hidden)
                     ->action(fn (Amendment $record) => $record->update(['hidden' => false])),
+                Action::make('suspendProposer')
+                    ->label('Suspend Proposer')
+                    ->color('danger')
+                    ->schema([
+                        Textarea::make('reason')
+                            ->rows(4)
+                            ->columnSpanFull(),
+                        DateTimePicker::make('suspension_ends_at')
+                            ->helperText('Leave blank for a permanent suspension.'),
+                    ])
+                    ->visible(fn (Amendment $record): bool => (bool) $record->user && !$record->user->isSuspended())
+                    ->action(function (Amendment $record, array $data): void {
+                        $record->user?->suspend($data['reason'] ?? null, $data['suspension_ends_at'] ?? null);
+                    }),
+                Action::make('restoreProposer')
+                    ->label('Restore Proposer')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (Amendment $record): bool => (bool) $record->user?->isSuspended())
+                    ->action(fn (Amendment $record) => $record->user?->clearSuspension()),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
