@@ -79,11 +79,18 @@ class BillController extends Controller
     public function vote(Request $request, Bill $bill)
     {
         $user = $request->user();
-        
+
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
         if (!$user->isVerifiedConstituent()) {
             return response()->json(['message' => 'You must complete constituent verification before voting.'], 403);
         }
-        
+
         if (!$bill->isVotingOpen()) {
             return response()->json(['message' => 'Voting is closed for this bill.'], 403);
         }
@@ -122,6 +129,13 @@ class BillController extends Controller
     public function deleteVote(Request $request, Bill $bill)
     {
         $user = $request->user();
+
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
 
         if (!$bill->isVotingOpen()) {
             return response()->json(['message' => 'Voting is closed for this bill.'], 403);

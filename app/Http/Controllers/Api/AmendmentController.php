@@ -13,10 +13,10 @@ class AmendmentController extends Controller
 {
     public function index(Request $request, Bill $bill)
     {
-        
         $query = $bill->amendments()
             ->userGenerated()
             ->where('hidden', false);
+
         if ($request->has('category')) {
             $query->where('category', $request->category);
         }
@@ -32,8 +32,15 @@ class AmendmentController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->email_verified_at) {
-            return response()->json(['message' => 'You must be verified to propose amendments.'], 403);
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
+        if (!$user->isVerifiedConstituent()) {
+            return response()->json(['message' => 'You must complete constituent verification before proposing amendments.'], 403);
         }
 
         if ($bill->official_vote_date && now()->gte($bill->official_vote_date)) {
@@ -93,8 +100,15 @@ class AmendmentController extends Controller
 
         $user = $request->user();
 
-        if (!$user->email_verified_at) {
-            return response()->json(['message' => 'You must be verified to support.'], 403);
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
+        if (!$user->isVerifiedConstituent()) {
+            return response()->json(['message' => 'You must complete constituent verification before supporting amendments.'], 403);
         }
 
         if ($amendment->supports()->where('user_id', $user->id)->exists()) {
@@ -122,6 +136,14 @@ class AmendmentController extends Controller
         }
 
         $user = $request->user();
+
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
         $deleted = $amendment->supports()->where('user_id', $user->id)->delete();
 
         if ($deleted && $amendment->support_count > 0) {

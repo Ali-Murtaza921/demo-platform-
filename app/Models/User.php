@@ -29,6 +29,9 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         'identity_verification_reference',
         'identity_verified_at',
         'identity_verification_meta',
+        'suspended_at',
+        'suspension_ends_at',
+        'suspension_reason',
         'address',
         'country',
         'state',
@@ -62,6 +65,8 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
             'is_verified' => 'boolean',
             'identity_verified_at' => 'datetime',
             'identity_verification_meta' => 'array',
+            'suspended_at' => 'datetime',
+            'suspension_ends_at' => 'datetime',
             'notification_preferences' => 'array',
             'password' => 'hashed',
         ];
@@ -69,7 +74,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->hasRole('admin');
+        return !$this->isSuspended() && $this->hasRole('admin');
     }
 
     public function userVotes()
@@ -107,6 +112,43 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return filled($this->federal_district) && filled($this->state_district);
     }
 
+    public function isSuspended(): bool
+    {
+        if ($this->suspended_at === null) {
+            return false;
+        }
+
+        return $this->suspension_ends_at === null || $this->suspension_ends_at->isFuture();
+    }
+
+    public function suspend(?string $reason = null, mixed $until = null): void
+    {
+        $this->forceFill([
+            'suspended_at' => now(),
+            'suspension_ends_at' => $until,
+            'suspension_reason' => $reason,
+        ])->save();
+    }
+
+    public function clearSuspension(): void
+    {
+        $this->forceFill([
+            'suspended_at' => null,
+            'suspension_ends_at' => null,
+            'suspension_reason' => null,
+        ])->save();
+    }
+
+    public function suspensionDetails(): array
+    {
+        return [
+            'active' => $this->isSuspended(),
+            'reason' => $this->suspension_reason,
+            'suspended_at' => $this->suspended_at?->toISOString(),
+            'ends_at' => $this->suspension_ends_at?->toISOString(),
+        ];
+    }
+
     public function nextOnboardingStep(): string
     {
         if (!$this->hasVerifiedEmail()) {
@@ -132,6 +174,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     {
         return $this->hasVerifiedEmail()
             && $this->hasCompletedLocation()
+            && !$this->isSuspended()
             && ($this->hasVerifiedIdentity() || $this->is_verified);
     }
 
@@ -152,6 +195,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
                 'verified' => $this->hasVerifiedIdentity(),
                 'verified_at' => $this->identity_verified_at?->toISOString(),
             ],
+            'suspension' => $this->suspensionDetails(),
             'location_completed' => $this->hasCompletedLocation(),
             'next_step' => $this->nextOnboardingStep(),
             'location' => [

@@ -78,12 +78,18 @@ class DatabaseSeeder extends Seeder
         }
 
         $settings = [
+            'platform_name' => 'DEMOS',
+            'contact_email' => 'info@demos.local',
+            'support_email' => 'support@demos.local',
             'amendment_threshold' => 1000,
             'proposal_threshold' => 5000,
             'duplicate_threshold' => 90,
             'voting_deadline_hours' => 48,
             'proposal_active_days' => 90,
             'auto_hide_report_count' => 10,
+            'feature_amendments_enabled' => 1,
+            'feature_citizen_proposals_enabled' => 1,
+            'maintenance_mode' => 0,
         ];
 
         foreach ($settings as $key => $value) {

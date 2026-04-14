@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AmendmentController;
 use App\Http\Controllers\Api\BillController;
 use App\Http\Controllers\Api\CitizenProposalController;
+use App\Http\Controllers\Api\ManagedContentController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\MobileAuthController;
@@ -27,6 +28,7 @@ Route::get('/bills/{bill}/amendments', [AmendmentController::class, 'index']);
 Route::get('/amendments/{amendment}', [AmendmentController::class, 'show']);
 Route::get('/citizen-proposals', [CitizenProposalController::class, 'index']);
 Route::get('/citizen-proposals/{proposal}', [CitizenProposalController::class, 'show']);
+Route::get('/content', [ManagedContentController::class, 'index']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [UserController::class, 'show']);
