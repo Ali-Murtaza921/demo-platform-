@@ -34,8 +34,15 @@ class CitizenProposalController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->is_verified) {
-            return response()->json(['message' => 'You must be verified to submit proposals.'], 403);
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
+        if (!$user->isVerifiedConstituent()) {
+            return response()->json(['message' => 'You must complete constituent verification before submitting proposals.'], 403);
         }
 
         $validator = Validator::make($request->all(), [
@@ -122,8 +129,15 @@ class CitizenProposalController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->is_verified) {
-            return response()->json(['message' => 'You must be verified to support.'], 403);
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
+        if (!$user->isVerifiedConstituent()) {
+            return response()->json(['message' => 'You must complete constituent verification before supporting proposals.'], 403);
         }
 
         if ($proposal->supports()->where('user_id', $user->id)->exists()) {
@@ -147,6 +161,14 @@ class CitizenProposalController extends Controller
     public function unsupport(Request $request, CitizenProposal $proposal)
     {
         $user = $request->user();
+
+        if ($user->isSuspended()) {
+            return response()->json([
+                'message' => 'Your account is suspended from participation.',
+                'suspension' => $user->suspensionDetails(),
+            ], 423);
+        }
+
         $deleted = $proposal->supports()->where('user_id', $user->id)->delete();
 
         if ($deleted && $proposal->support_count > 0) {

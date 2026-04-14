@@ -10,6 +10,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -143,8 +144,8 @@ class ReportResource extends Resource
                         $reportable->update(['hidden' => true]);
                         $record->update(['status' => 'action_taken']);
                     }),
-                Action::make('unhideContent')
-                    ->label('Unhide Content')
+                Action::make('restoreContent')
+                    ->label('Approve & Restore')
                     ->color('warning')
                     ->requiresConfirmation()
                     ->visible(function (Report $record): bool {
@@ -161,6 +162,56 @@ class ReportResource extends Resource
 
                         $reportable->update(['hidden' => false]);
                         $record->update(['status' => 'reviewed']);
+                    }),
+                Action::make('deleteContent')
+                    ->label('Delete Content')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (Report $record): bool => $record->reportable !== null)
+                    ->action(function (Report $record): void {
+                        $reportable = $record->reportable;
+
+                        if (!$reportable) {
+                            return;
+                        }
+
+                        $reportable->delete();
+                        $record->update(['status' => 'action_taken']);
+                    }),
+                Action::make('suspendAuthor')
+                    ->label('Suspend Author')
+                    ->color('danger')
+                    ->schema([
+                        Textarea::make('reason')
+                            ->rows(4)
+                            ->columnSpanFull(),
+                        DateTimePicker::make('suspension_ends_at')
+                            ->helperText('Leave blank for a permanent suspension.'),
+                    ])
+                    ->visible(fn (Report $record): bool => (bool) $record->reportable?->user && !$record->reportable->user->isSuspended())
+                    ->action(function (Report $record, array $data): void {
+                        $author = $record->reportable?->user;
+
+                        if (!$author) {
+                            return;
+                        }
+
+                        $author->suspend($data['reason'] ?? null, $data['suspension_ends_at'] ?? null);
+                        $record->update(['status' => 'action_taken']);
+                    }),
+                Action::make('restoreAuthor')
+                    ->label('Restore Author')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (Report $record): bool => (bool) $record->reportable?->user?->isSuspended())
+                    ->action(function (Report $record): void {
+                        $author = $record->reportable?->user;
+
+                        if (!$author) {
+                            return;
+                        }
+
+                        $author->clearSuspension();
                     }),
                 EditAction::make(),
                 DeleteAction::make(),

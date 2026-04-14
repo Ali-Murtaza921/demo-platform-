@@ -9,12 +9,13 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 class SettingResource extends Resource
@@ -31,12 +32,16 @@ class SettingResource extends Resource
     {
         return $schema
             ->components([
-                TextInput::make('key')
+                Select::make('key')
+                    ->options(Setting::options())
+                    ->searchable()
                     ->required()
                     ->unique(ignoreRecord: true)
                     ->maxLength(255),
                 Textarea::make('value')
+                    ->label('Value')
                     ->rows(5)
+                    ->helperText('Use plain numeric values for thresholds and hours. Boolean-style settings may use 1/0 or true/false.')
                     ->columnSpanFull(),
             ]);
     }
@@ -46,8 +51,15 @@ class SettingResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('key')
+                    ->label('Setting')
+                    ->formatStateUsing(fn (string $state): string => Setting::labelFor($state))
+                    ->description(fn (Setting $record): ?string => Setting::descriptionFor($record->key))
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('setting_group')
+                    ->label('Group')
+                    ->state(fn (Setting $record): string => Setting::groupFor($record->key))
+                    ->badge(),
                 TextColumn::make('value')
                     ->limit(80)
                     ->wrap(),
@@ -56,7 +68,8 @@ class SettingResource extends Resource
                     ->sortable(),
             ])
             ->filters([
-                //
+                SelectFilter::make('key')
+                    ->options(Setting::options()),
             ])
             ->recordActions([
                 EditAction::make(),

@@ -17,9 +17,9 @@
 
 ## Phase 3 - Admin Operations Buildout
 - [x] Build Filament resources for Bills, Amendments, Citizen Proposals, Reports, Representatives, Settings.
-- [ ] Add moderation actions: approve/restore, delete, ban/suspend.
-- [ ] Add threshold and voting settings management in admin UI.
-- [ ] Add content management pages for FAQs/guidelines/announcements.
+- [x] Add moderation actions: approve/restore, delete, ban/suspend.
+- [x] Add threshold and voting settings management in admin UI.
+- [x] Add content management pages for FAQs/guidelines/announcements.
 
 ## Phase 4 - Data & Integrations
 - [ ] Add scheduled sync orchestration for federal/state bills and official votes.
