@@ -30,6 +30,12 @@ class SyncFederalRepresentativeDetails implements ShouldQueue
         }
 
         $response = $api->getMemberDetails($this->bioguideId);
+
+        if (!$response && $api->isRateLimitCoolingDown()) {
+            $this->release($api->rateLimitRetryAfterSeconds());
+            return;
+        }
+
         $data = $response['member'] ?? $response;
 
         if (!is_array($data) || $data === []) {

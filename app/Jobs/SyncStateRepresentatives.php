@@ -38,9 +38,9 @@ class SyncStateRepresentatives implements ShouldQueue
 
             do {
                 $response = $api->getLegislators($state->code, null, $page, $perPage, [
-                    'memberships',
                     'links',
                     'sources',
+                    'offices',
                 ]);
 
                 if (!$response || !isset($response['results'])) {

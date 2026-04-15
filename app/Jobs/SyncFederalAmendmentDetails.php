@@ -31,6 +31,12 @@ class SyncFederalAmendmentDetails implements ShouldQueue
     public function handle(CongressGovApi $api): void
     {
         $response = $api->getAmendmentDetails($this->congress, $this->amendmentType, $this->amendmentNumber);
+
+        if (!$response && $api->isRateLimitCoolingDown()) {
+            $this->release($api->rateLimitRetryAfterSeconds());
+            return;
+        }
+
         $data = $response['amendment'] ?? $response;
 
         if (!is_array($data) || $data === []) {

@@ -2,21 +2,34 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class CongressGovApi
 {
+    private const RATE_LIMIT_CACHE_KEY = 'congress_gov:rate_limited_until';
+    private const RATE_LIMIT_LOG_CACHE_KEY = 'congress_gov:rate_limited_logged_until';
+
     protected string $apiKey;
     protected string $baseUrl = 'https://api.congress.gov/v3/';
     protected int $maxLimit = 250;
     protected bool $verifySsl;
+    protected int $requestIntervalMs;
+    protected int $timeoutSeconds;
+    protected int $rateLimitCooldownSeconds;
+    protected static float $lastRequestAt = 0.0;
 
     public function __construct()
     {
         $this->apiKey = config('services.congress_gov.api_key');
         $this->verifySsl = (bool) config('services.congress_gov.verify_ssl', true);
+        $this->requestIntervalMs = max(0, (int) config('services.congress_gov.request_interval_ms', 250));
+        $this->timeoutSeconds = max(1, (int) config('services.congress_gov.timeout_seconds', 30));
+        $this->rateLimitCooldownSeconds = max(1, (int) config('services.congress_gov.rate_limit_cooldown_seconds', 300));
     }
 
     public function currentCongress(): int
@@ -265,6 +278,22 @@ class CongressGovApi
         return $this->requestUrl('bill subjects', $url);
     }
 
+    public function isRateLimitCoolingDown(): bool
+    {
+        return $this->rateLimitedUntil() !== null;
+    }
+
+    public function rateLimitRetryAfterSeconds(): int
+    {
+        $until = $this->rateLimitedUntil();
+
+        if (!$until) {
+            return 0;
+        }
+
+        return max(1, now()->diffInSeconds($until, false));
+    }
+
     private function request(string $context, string $path, array $params = []): ?array
     {
         return $this->sendRequest($context, $this->baseUrl . ltrim($path, '/'), $params);
@@ -277,9 +306,20 @@ class CongressGovApi
 
     private function sendRequest(string $context, string $url, array $params = []): ?array
     {
+        if ($this->shouldSkipForRateLimit($context, $url)) {
+            return null;
+        }
+
+        $this->throttle();
+
         try {
-            $response = Http::retry(3, 500, throw: false)
-                ->timeout(30)
+            $response = Http::retry(
+                3,
+                500,
+                fn (mixed $exception, mixed $request): bool => $this->shouldRetryRequest($exception),
+                throw: false
+            )
+                ->timeout($this->timeoutSeconds)
                 ->withOptions(['verify' => $this->verifySsl])
                 ->acceptJson()
                 ->get($url, $this->withDefaultParams($params));
@@ -288,6 +328,12 @@ class CongressGovApi
                 'url' => $url,
                 'verify_ssl' => $this->verifySsl,
             ]);
+
+            return null;
+        }
+
+        if ($response->status() === 429) {
+            $this->markRateLimited($response, $context, $url);
 
             return null;
         }
@@ -318,6 +364,127 @@ class CongressGovApi
     private function sanitizeLimit(int $limit): int
     {
         return max(1, min($limit, $this->maxLimit));
+    }
+
+    private function shouldRetryRequest(mixed $exception): bool
+    {
+        if ($exception instanceof ConnectionException) {
+            return true;
+        }
+
+        if ($exception instanceof RequestException) {
+            return $exception->response->status() >= 500;
+        }
+
+        return false;
+    }
+
+    private function shouldSkipForRateLimit(string $context, string $url): bool
+    {
+        $until = $this->rateLimitedUntil();
+
+        if (!$until) {
+            return false;
+        }
+
+        $ttl = max(1, now()->diffInSeconds($until, false));
+
+        if (Cache::add(self::RATE_LIMIT_LOG_CACHE_KEY, $until->toIso8601String(), $until)) {
+            Log::warning('Congress.gov rate limit cooldown active; skipping request.', [
+                'context' => $context,
+                'url' => $url,
+                'cooldown_until' => $until->toIso8601String(),
+                'remaining_seconds' => $ttl,
+                'verify_ssl' => $this->verifySsl,
+            ]);
+        }
+
+        return true;
+    }
+
+    private function rateLimitedUntil(): ?Carbon
+    {
+        $until = Cache::get(self::RATE_LIMIT_CACHE_KEY);
+
+        if (blank($until)) {
+            return null;
+        }
+
+        try {
+            $parsed = Carbon::parse((string) $until);
+        } catch (\Throwable) {
+            Cache::forget(self::RATE_LIMIT_CACHE_KEY);
+            Cache::forget(self::RATE_LIMIT_LOG_CACHE_KEY);
+
+            return null;
+        }
+
+        if (now()->gte($parsed)) {
+            Cache::forget(self::RATE_LIMIT_CACHE_KEY);
+            Cache::forget(self::RATE_LIMIT_LOG_CACHE_KEY);
+
+            return null;
+        }
+
+        return $parsed;
+    }
+
+    private function markRateLimited($response, string $context, string $url): void
+    {
+        $retryAfterSeconds = $this->resolveRetryAfterSeconds($response->header('Retry-After'));
+        $until = now()->addSeconds($retryAfterSeconds);
+
+        Cache::put(self::RATE_LIMIT_CACHE_KEY, $until->toIso8601String(), $until);
+        Cache::put(self::RATE_LIMIT_LOG_CACHE_KEY, $until->toIso8601String(), $until);
+
+        Log::warning('Congress.gov rate limit exceeded; pausing requests until cooldown expires.', [
+            'context' => $context,
+            'status' => $response->status(),
+            'url' => $url,
+            'retry_after_seconds' => $retryAfterSeconds,
+            'cooldown_until' => $until->toIso8601String(),
+            'verify_ssl' => $this->verifySsl,
+        ]);
+    }
+
+    private function resolveRetryAfterSeconds(mixed $retryAfter): int
+    {
+        if (is_array($retryAfter)) {
+            $retryAfter = $retryAfter[0] ?? null;
+        }
+
+        if (is_numeric($retryAfter)) {
+            return max(1, (int) $retryAfter);
+        }
+
+        if (is_string($retryAfter) && trim($retryAfter) !== '') {
+            try {
+                return max(1, now()->diffInSeconds(Carbon::parse($retryAfter), false));
+            } catch (\Throwable) {
+                // Fall back to the configured cooldown.
+            }
+        }
+
+        return $this->rateLimitCooldownSeconds;
+    }
+
+    private function throttle(): void
+    {
+        if ($this->requestIntervalMs <= 0) {
+            self::$lastRequestAt = microtime(true);
+
+            return;
+        }
+
+        $now = microtime(true);
+        $elapsedMs = ($now - self::$lastRequestAt) * 1000;
+        $sleepMs = $this->requestIntervalMs - $elapsedMs;
+
+        if ($sleepMs > 0) {
+            usleep((int) round($sleepMs * 1000));
+        }
+
+        self::$lastRequestAt = microtime(true);
     }
 
     private function getAllPagesByUrl(string $url, array $collectionKeys = [], ?callable $singleObjectDetector = null): array
