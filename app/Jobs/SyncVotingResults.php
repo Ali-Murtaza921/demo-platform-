@@ -64,6 +64,11 @@ class SyncVotingResults implements ShouldQueue
                 do {
                     $requestLimit = $this->remainingLimit($processed, $pageLimit);
                     $response = $api->getHouseVotes($congress, $session, $offset, $requestLimit);
+
+                    if (!$response && $api->isRateLimitCoolingDown()) {
+                        $this->release($api->rateLimitRetryAfterSeconds());
+                        return;
+                    }
                     
                     $houseVotes = is_array($response)
                         ? ($response['houseRollCallVotes'] ?? $response['houseVotes'] ?? $response['rollCallVotes'] ?? [])
@@ -92,6 +97,11 @@ class SyncVotingResults implements ShouldQueue
 
                         $voteSession = (int) ($houseVote['sessionNumber'] ?? $session);
                         $memberVotes = $api->getAllHouseVoteMembers($congress, $voteSession, (int) $voteNumber);
+                        if ($memberVotes === [] && $api->isRateLimitCoolingDown()) {
+                            $this->release($api->rateLimitRetryAfterSeconds());
+                            return;
+                        }
+
                         if ($memberVotes === []) {
                             continue;
                         }

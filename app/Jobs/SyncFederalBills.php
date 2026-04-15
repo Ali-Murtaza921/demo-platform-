@@ -43,6 +43,11 @@ class SyncFederalBills implements ShouldQueue
         
             $response = $api->getBills($fallbackCongress, $offset, $requestLimit);
             if (!$response || !isset($response['bills'])) {
+                if ($api->isRateLimitCoolingDown()) {
+                    $this->release($api->rateLimitRetryAfterSeconds());
+                    return;
+                }
+
                 break;
             }
 

@@ -27,7 +27,7 @@ class SyncFederalAmendments implements ShouldQueue
     {
         $congress = $api->currentCongress();
         $fromDateTime = $this->resolveFromDateTime();
-        $toDateTime = Carbon::now('UTC')->toIso8601String();
+        $toDateTime = $this->formatCongressDateTime(Carbon::now('UTC'));
 
         $offset = 0;
         $pageLimit = 250;
@@ -38,6 +38,11 @@ class SyncFederalAmendments implements ShouldQueue
             
             $response = $api->getAmendments($congress, $offset, $requestLimit, $fromDateTime, $toDateTime);
             if (!$response || !isset($response['amendments'])) {
+                if ($api->isRateLimitCoolingDown()) {
+                    $this->release($api->rateLimitRetryAfterSeconds());
+                    return;
+                }
+
                 break;
             }
 
@@ -78,13 +83,18 @@ class SyncFederalAmendments implements ShouldQueue
 
         if (!blank($stored)) {
             try {
-                return Carbon::parse($stored)->utc()->toIso8601String();
+                return $this->formatCongressDateTime(Carbon::parse($stored));
             } catch (\Throwable) {
                 // Fall through to default lookback.
             }
         }
 
-        return Carbon::now('UTC')->subDays(30)->startOfDay()->toIso8601String();
+        return $this->formatCongressDateTime(Carbon::now('UTC')->subDays(30)->startOfDay());
+    }
+
+    private function formatCongressDateTime(Carbon $value): string
+    {
+        return $value->copy()->utc()->format('Y-m-d\TH:i:s\Z');
     }
 
     private function normalizeLimit(?int $limit): ?int

@@ -38,6 +38,11 @@ class SyncFederalRepresentatives implements ShouldQueue
             $requestLimit = $this->remainingLimit($processed, $pageLimit);
             $response = $api->getMembers(null, null, $offset, $requestLimit);
             if (!$response || !isset($response['members'])) {
+                if ($api->isRateLimitCoolingDown()) {
+                    $this->release($api->rateLimitRetryAfterSeconds());
+                    return;
+                }
+
                 break;
             }
 

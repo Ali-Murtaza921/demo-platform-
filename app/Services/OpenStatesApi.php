@@ -237,8 +237,10 @@ class OpenStatesApi
     {
         $normalized = strtolower($body);
 
-        return str_contains($normalized, 'exceeded limit')
-            || (str_contains($normalized, '/day') && str_contains($normalized, 'detail'));
+        return str_contains($normalized, '/day')
+            || str_contains($normalized, 'per day')
+            || str_contains($normalized, 'daily quota')
+            || str_contains($normalized, 'daily limit');
     }
 
     private function markQuotaExceeded(string $body, string $endpoint, string $context): void

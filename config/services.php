@@ -38,6 +38,9 @@ return [
     'congress_gov' => [
         'api_key' => env('CONGRESS_GOV_API_KEY'),
         'verify_ssl' => env('CONGRESS_GOV_VERIFY_SSL', true),
+        'request_interval_ms' => env('CONGRESS_GOV_REQUEST_INTERVAL_MS', 250),
+        'timeout_seconds' => env('CONGRESS_GOV_TIMEOUT_SECONDS', 30),
+        'rate_limit_cooldown_seconds' => env('CONGRESS_GOV_RATE_LIMIT_COOLDOWN_SECONDS', 300),
     ],
 
     'open_states' => [

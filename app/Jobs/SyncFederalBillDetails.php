@@ -39,6 +39,11 @@ class SyncFederalBillDetails implements ShouldQueue
             $this->billNumber
         );
 
+        if (!$response && $api->isRateLimitCoolingDown()) {
+            $this->release($api->rateLimitRetryAfterSeconds());
+            return;
+        }
+
         $data = $response['bill'] ?? $response;
         if (!is_array($data) || $data === []) {
             return;
